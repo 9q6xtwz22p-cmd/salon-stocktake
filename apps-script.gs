@@ -23,6 +23,10 @@
 var KEY = '';          // 合言葉。空なら誰でも書ける。必ず変えること
 var TZ  = 'Asia/Tokyo';
 
+// **文字として入れる列。** これを指定しないとスプレッドシートが勝手に変換する。
+//   「2026-08」→ 日付、「6%」→ 0.06 になり、月のキーも別名も壊れる（実際に壊れた）。
+var TEXT_COLS = { '店舗': [1, 2], '品目': [1, 2, 3, 4, 7], '棚卸': [1, 2, 3, 4], '月次': [1, 2, 7, 8] };
+
 var SHEETS = {
   店舗: ['id', '名前'],
   品目: ['店舗', 'id', '品目名', 'カテゴリ', '単価(税込)', '初期在庫', '別名'],
@@ -60,7 +64,18 @@ function rows_(name) {
 function write_(name, body) {
   var sh = sheet_(name), w = SHEETS[name].length;
   if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, w).clearContent();
-  if (body.length) sh.getRange(2, 1, body.length, w).setValues(body);
+  if (!body.length) return;
+  // 値を入れる前に書式を文字にする。入れてからでは手遅れ
+  (TEXT_COLS[name] || []).forEach(function (c) {
+    sh.getRange(2, c, body.length, 1).setNumberFormat('@');
+  });
+  sh.getRange(2, 1, body.length, w).setValues(body);
+}
+
+function ym_(v) {
+  // 既に日付として入っている古い行も読めるようにする
+  if (v instanceof Date) return Utilities.formatDate(v, TZ, 'yyyy-MM');
+  return String(v || '');
 }
 function json_(o) {
   return ContentService.createTextOutput(JSON.stringify(o))
@@ -95,7 +110,7 @@ function doGet(e) {
   var months = {};
   rows_('棚卸').forEach(function (r) {
     if (r[0] === '' || r[1] === '' || r[2] === '') return;
-    var k = String(r[0]) + '__' + String(r[1]);
+    var k = String(r[0]) + '__' + ym_(r[1]);
     months[k] = months[k] || { entries: {} };
     var e2 = {};
     if (num_(r[4]) !== null) e2['in'] = num_(r[4]);
@@ -104,7 +119,7 @@ function doGet(e) {
   });
   rows_('月次').forEach(function (r) {
     if (r[0] === '' || r[1] === '') return;
-    var k = String(r[0]) + '__' + String(r[1]);
+    var k = String(r[0]) + '__' + ym_(r[1]);
     months[k] = months[k] || { entries: {} };
     months[k].sales = Number(r[2] || 0);
     months[k].who = String(r[6] || '');
@@ -132,7 +147,7 @@ function saveMonth_(b) {
   rows_('品目').forEach(function (r) { if (String(r[0]) === store) names[String(r[1])] = String(r[2]); });
 
   var keep = rows_('棚卸').filter(function (r) {
-    return !(String(r[0]) === store && String(r[1]) === ym);
+    return !(String(r[0]) === store && ym_(r[1]) === ym);
   });
   var add = [];
   Object.keys(b.entries || {}).forEach(function (id) {
@@ -141,12 +156,14 @@ function saveMonth_(b) {
     add.push([store, ym, id, names[id] || '', v['in'] === undefined ? '' : v['in'],
               v.end === undefined ? '' : v.end]);
   });
+  keep.forEach(function (r) { r[1] = ym_(r[1]); });
   write_('棚卸', keep.concat(add));
 
   var stamp = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
   var m = rows_('月次').filter(function (r) {
-    return !(String(r[0]) === store && String(r[1]) === ym);
+    return !(String(r[0]) === store && ym_(r[1]) === ym);
   });
+  m.forEach(function (r) { r[1] = ym_(r[1]); });
   m.push([store, ym, Number(b.sales || 0), Number(b.cost || 0),
           b.rate === null || b.rate === undefined ? '' : Number(b.rate),
           Number(b.stockValue || 0), String(b.who || ''), stamp]);
