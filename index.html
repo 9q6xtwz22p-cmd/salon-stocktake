@@ -277,20 +277,29 @@ function shareLink(){
   return location.origin+location.pathname+"#s="+btoa(unescape(encodeURIComponent(c.url+"\u0001"+c.key)));
 }
 
+function netErr(status){
+  if(status===404||status===403)
+    return "つながりませんでした。URLが違うか、デプロイの「アクセスできるユーザー」が『全員』になっていません。";
+  return "つながりませんでした。通信を確認して、もう一度ためしてください。";
+}
 async function apiGet(){
   const c=CFG();
-  const r=await fetch(c.url+"?key="+encodeURIComponent(c.key),{method:"GET"});
-  if(!r.ok)throw new Error("HTTP "+r.status);
+  let r;
+  try{r=await fetch(c.url+"?key="+encodeURIComponent(c.key),{method:"GET"})}
+  catch(e){throw new Error("つながりませんでした。URLが正しいか確認してください。")}
+  if(!r.ok)throw new Error(netErr(r.status));
   const d=await r.json();
   if(!d.ok)throw new Error(d.error==="key"?"合言葉が違います":"読み込めませんでした");
   return d;
 }
 async function apiPost(body){
   const c=CFG();
-  const r=await fetch(c.url,{method:"POST",
+  let r;
+  try{r=await fetch(c.url,{method:"POST",
     headers:{"Content-Type":"text/plain;charset=utf-8"},
-    body:JSON.stringify(Object.assign({key:c.key},body))});
-  if(!r.ok)throw new Error("HTTP "+r.status);
+    body:JSON.stringify(Object.assign({key:c.key},body))})}
+  catch(e){throw new Error("保存できませんでした。電波の届くところでもう一度ためしてください。")}
+  if(!r.ok)throw new Error(netErr(r.status));
   const d=await r.json();
   if(!d.ok)throw new Error(d.error==="key"?"合言葉が違います":"保存できませんでした");
   return d;
@@ -564,13 +573,13 @@ function renderItems(){
 /* ---- render & events ---- */
 function render(){
   // 設定が済むまでは、上の数字も下のタブも見せない（空の店舗欄が出て壊れて見える）
-  const setup=S.mode==="setup";
+  const setup=S.mode==="setup"||S.mode==="name";
   document.querySelector("header.hero").hidden=setup;
   document.querySelector("nav.tabs").hidden=setup;
   document.querySelector(".wrap").style.paddingBottom=setup?"24px":"";
   if(!setup)renderHeader();
   const v=$("#view");
-  v.innerHTML=S.mode==="setup"?renderSetup():
+  v.innerHTML=S.mode==="setup"?renderSetup():S.mode==="name"?renderName():
               S.tab==="input"?renderInput():S.tab==="sum"?renderSum():
               S.tab==="trend"?renderTrend():renderItems()+renderSettings();
   document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.tab===S.tab)));
@@ -596,6 +605,10 @@ $("#view").addEventListener("click",async e=>{
     if(!u){toast("URLを入れてください");return}
     if(!w){toast("名前を入れてください");return}
     lsSet("url",u);lsSet("key",k);lsSet("who",w);S.who=w;load();return}
+  if(t.id==="nmSave"){
+    const w=$("#nmIn").value.trim();
+    if(!w){toast("名前を入れてください");return}
+    lsSet("who",w);S.who=w;load();return}
   if(t.id==="reload"){load();return}
   if(t.id==="copyShare"){copyText(shareLink());return}
   if(t.id==="copyReport"){copyText(reportText());return}
@@ -646,14 +659,20 @@ $("#view").addEventListener("submit",async e=>{
 });
 
 /* ---- 設定画面（初回だけ） ---- */
+function renderName(){
+  return '<section class="panel" style="margin-top:18px"><h2>お名前を教えてください</h2>'+
+  '<p class="note" style="padding:0">棚卸しを入れた人として残ります。最初の1回だけです。</p>'+
+  '<div class="fld"><label for="nmIn">名前</label><input id="nmIn" value="'+esc(S.who)+'" placeholder="例：山田"></div>'+
+  '<div class="row"><button class="btn pri" id="nmSave">はじめる</button></div></section>';
+}
 function renderSetup(){
   const c=CFG();
   return '<section class="panel" style="margin-top:18px"><h2>最初の設定</h2>'+
   '<p class="note" style="padding:0">保存先のスプレッドシートにつなぎます。1回だけです。'+
-  'URLと合言葉は店舗の管理者から受け取ってください。</p>'+
-  '<div class="fld"><label for="cfgUrl">Apps Script のURL</label>'+
+  '管理者から受け取ったリンクを開けば、この画面は出ません。</p>'+
+  '<div class="fld"><label for="cfgUrl">保存先のURL</label>'+
   '<input id="cfgUrl" value="'+esc(c.url)+'" placeholder="https://script.google.com/.../exec"></div>'+
-  '<div class="fld"><label for="cfgKey">合言葉</label><input id="cfgKey" value="'+esc(c.key)+'"></div>'+
+  '<div class="fld"><label for="cfgKey">合言葉（決めていなければ空のまま）</label><input id="cfgKey" value="'+esc(c.key)+'"></div>'+
   '<div class="fld"><label for="cfgWho">あなたの名前（記録に残ります）</label>'+
   '<input id="cfgWho" value="'+esc(S.who)+'" placeholder="例：山田"></div>'+
   '<div class="row"><button class="btn pri" id="cfgSave">つなぐ</button></div>'+
@@ -684,8 +703,10 @@ async function load(){
 }
 readLink();
 S.who=lsGet("who");
+if(!CFG().url)S.mode="setup";
+else if(!S.who)S.mode="name";
 render();
-if(CFG().url){load()}else{S.mode="setup";render()}
+if(S.mode==="loading")load();
 </script>
 </body>
 </html>
