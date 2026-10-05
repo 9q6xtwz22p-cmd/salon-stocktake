@@ -166,7 +166,7 @@ tfoot td{font-weight:700;border-bottom:0}
 const TAX=1.1;                 /* 単価は税込で持つ。在庫管理表も請求書も税込のため */
 const BAND=[8,12];             /* 材料費率の目安（美容室の一般的な水準） */
 const S={stores:[],store:null,items:{},months:{},tab:"input",cur:null,ready:false,
-         who:"",canWrite:true,mode:"loading",err:"",showBuy:false,
+         who:"",canWrite:true,mode:"loading",err:"",showBuy:false,busy:false,
          confirmDel:null,editing:null,paste:null};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -601,7 +601,7 @@ function renderItems(){
 /* ---- render & events ---- */
 function render(){
   // 設定が済むまでは、上の数字も下のタブも見せない（空の店舗欄が出て壊れて見える）
-  const setup=S.mode==="setup"||S.mode==="name";
+  const setup=S.mode==="setup"||S.mode==="name"||(S.busy&&!S.ready);
   document.querySelector("header.hero").hidden=setup;
   document.querySelector("nav.tabs").hidden=setup;
   document.querySelector(".wrap").style.paddingBottom=setup?"24px":"";
@@ -688,13 +688,21 @@ $("#view").addEventListener("submit",async e=>{
 });
 
 /* ---- 設定画面（初回だけ） ---- */
+function renderWait(){
+  return '<section class="panel" style="margin-top:18px"><h2>読み込んでいます</h2>'+
+  '<p class="note" style="padding:0">保存先から品目と在庫を取ってきています。'+
+  '混んでいると30秒ほどかかることがあります。そのままお待ちください。</p>'+
+  '<div class="bar" style="background:var(--sunk)"><i style="width:40%;background:var(--accent)"></i></div></section>';
+}
 function renderName(){
+  if(S.busy)return renderWait();
   return '<section class="panel" style="margin-top:18px"><h2>お名前を教えてください</h2>'+
   '<p class="note" style="padding:0">棚卸しを入れた人として残ります。最初の1回だけです。</p>'+
   '<div class="fld"><label for="nmIn">名前</label><input id="nmIn" value="'+esc(S.who)+'" placeholder="例：山田"></div>'+
   '<div class="row"><button class="btn pri" id="nmSave">はじめる</button></div></section>';
 }
 function renderSetup(){
+  if(S.busy)return renderWait();
   const c=CFG();
   return '<section class="panel" style="margin-top:18px"><h2>最初の設定</h2>'+
   '<p class="note" style="padding:0">保存先のスプレッドシートにつなぎます。1回だけです。'+
@@ -726,9 +734,10 @@ function apply(d){
     S.store=(saved&&S.stores.some(x=>x.id===saved))?saved:S.stores[0].id;
 }
 async function load(){
-  setSync("読み込み中…");
-  try{apply(await apiGet());S.ready=true;S.mode="api";S.err="";setSync("");render()}
-  catch(e){S.mode="setup";S.err=(e&&e.message)||"つながりませんでした";S.ready=false;setSync("");render()}
+  S.busy=true;S.err="";render();setSync("読み込み中…");
+  try{apply(await apiGet());S.ready=true;S.mode="api"}
+  catch(e){S.mode="setup";S.err=(e&&e.message)||"つながりませんでした";S.ready=false}
+  finally{S.busy=false;setSync("");render()}
 }
 readLink();
 S.who=lsGet("who");
