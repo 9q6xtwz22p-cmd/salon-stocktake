@@ -282,11 +282,24 @@ function netErr(status){
     return "つながりませんでした。URLが違うか、デプロイの「アクセスできるユーザー」が『全員』になっていません。";
   return "つながりませんでした。通信を確認して、もう一度ためしてください。";
 }
+// **合言葉が空なら ?key= を付けない。** 空で付けると Apps Script が応答を返さず、
+// ページが無言で固まる（curlでは通るのにブラウザだけ固まった。実際に踏んだ）。
+const q=k=>k?"?key="+encodeURIComponent(k):"";
+// 返事が来ないまま黙って待ち続けないよう、必ず打ち切る
+function withTimeout(ms){
+  const a=new AbortController();
+  const t=setTimeout(()=>a.abort(),ms);
+  return {signal:a.signal,done:()=>clearTimeout(t)};
+}
 async function apiGet(){
   const c=CFG();
+  const to=withTimeout(30000);
   let r;
-  try{r=await fetch(c.url+"?key="+encodeURIComponent(c.key),{method:"GET"})}
-  catch(e){throw new Error("つながりませんでした。URLが正しいか確認してください。")}
+  try{r=await fetch(c.url+q(c.key),{method:"GET",signal:to.signal})}
+  catch(e){throw new Error(e&&e.name==="AbortError"
+    ?"返事がありません。URLと、デプロイの「アクセスできるユーザー」が『全員』かを確認してください。"
+    :"つながりませんでした。URLが正しいか確認してください。")}
+  finally{to.done()}
   if(!r.ok)throw new Error(netErr(r.status));
   const d=await r.json();
   if(!d.ok)throw new Error(d.error==="key"?"合言葉が違います":"読み込めませんでした");
@@ -294,11 +307,15 @@ async function apiGet(){
 }
 async function apiPost(body){
   const c=CFG();
+  const to=withTimeout(30000);
   let r;
-  try{r=await fetch(c.url,{method:"POST",
+  try{r=await fetch(c.url,{method:"POST",signal:to.signal,
     headers:{"Content-Type":"text/plain;charset=utf-8"},
     body:JSON.stringify(Object.assign({key:c.key},body))})}
-  catch(e){throw new Error("保存できませんでした。電波の届くところでもう一度ためしてください。")}
+  catch(e){throw new Error(e&&e.name==="AbortError"
+    ?"保存の返事がありません。電波を確認して、もう一度ためしてください。"
+    :"保存できませんでした。電波の届くところでもう一度ためしてください。")}
+  finally{to.done()}
   if(!r.ok)throw new Error(netErr(r.status));
   const d=await r.json();
   if(!d.ok)throw new Error(d.error==="key"?"合言葉が違います":"保存できませんでした");
