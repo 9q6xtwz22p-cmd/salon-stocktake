@@ -288,50 +288,47 @@ function shareLink(){
   return location.origin+location.pathname+"#s="+btoa(unescape(encodeURIComponent(c.url+"\u0001"+c.key)));
 }
 
-function netErr(status){
-  if(status===404||status===403)
-    return "つながりませんでした。URLが違うか、デプロイの「アクセスできるユーザー」が『全員』になっていません。";
-  return "つながりませんでした。通信を確認して、もう一度ためしてください。";
-}
 // **合言葉が空なら ?key= を付けない。** 空で付けると Apps Script が応答を返さず、
 // ページが無言で固まる（curlでは通るのにブラウザだけ固まった。実際に踏んだ）。
 const q=k=>k?"?key="+encodeURIComponent(k):"";
-// 返事が来ないまま黙って待ち続けないよう、必ず打ち切る
-function withTimeout(ms){
-  const a=new AbortController();
-  const t=setTimeout(()=>a.abort(),ms);
-  return {signal:a.signal,done:()=>clearTimeout(t)};
+
+// **Apps Script は遅いし、たまに404を返す。**
+// 実測で 2.5〜37秒、5回に1回ほど404（2026-10-05）。1回で諦めると使い物にならないので、
+// 間を空けて3回まで試す。合言葉違いだけは何度やっても同じなので、すぐ返す。
+const TIMEOUT=45000, TRIES=3;
+function fail(msg,retry){const e=new Error(msg);e.retry=!!retry;return e}
+async function retrying(once){
+  let last;
+  for(let i=0;i<TRIES;i++){
+    try{return await once()}
+    catch(e){
+      last=e;
+      if(!e.retry)throw e;
+      if(i<TRIES-1){setSync("もう一度ためしています…");await new Promise(r=>setTimeout(r,1500*(i+1)))}
+    }
+  }
+  throw last;
 }
-async function apiGet(){
-  const c=CFG();
-  const to=withTimeout(30000);
+async function call(url,opt){
+  const a=new AbortController(), t=setTimeout(()=>a.abort(),TIMEOUT);
   let r;
-  try{r=await fetch(c.url+q(c.key),{method:"GET",signal:to.signal})}
-  catch(e){throw new Error(e&&e.name==="AbortError"
-    ?"返事がありません。URLと、デプロイの「アクセスできるユーザー」が『全員』かを確認してください。"
-    :"つながりませんでした。URLが正しいか確認してください。")}
-  finally{to.done()}
-  if(!r.ok)throw new Error(netErr(r.status));
-  const d=await r.json();
-  if(!d.ok)throw new Error(d.error==="key"?"合言葉が違います":"読み込めませんでした");
+  try{r=await fetch(url,Object.assign({signal:a.signal},opt||{}))}
+  catch(e){throw fail(e&&e.name==="AbortError"
+    ?"返事がありません。電波を確認して、もう一度ためしてください。"
+    :"つながりませんでした。電波を確認してください。",true)}
+  finally{clearTimeout(t)}
+  if(!r.ok)throw fail(r.status===404||r.status===403
+    ?"つながりませんでした。URLが違うか、デプロイの「アクセスできるユーザー」が『全員』になっていません。"
+    :"つながりませんでした。しばらく置いてから、もう一度ためしてください。",true);
+  let d;
+  try{d=await r.json()}catch(e){throw fail("返事の中身が読めませんでした。",true)}
+  if(!d.ok)throw fail(d.error==="key"?"合言葉が違います":"うまくいきませんでした",false);
   return d;
 }
-async function apiPost(body){
-  const c=CFG();
-  const to=withTimeout(30000);
-  let r;
-  try{r=await fetch(c.url,{method:"POST",signal:to.signal,
-    headers:{"Content-Type":"text/plain;charset=utf-8"},
-    body:JSON.stringify(Object.assign({key:c.key},body))})}
-  catch(e){throw new Error(e&&e.name==="AbortError"
-    ?"保存の返事がありません。電波を確認して、もう一度ためしてください。"
-    :"保存できませんでした。電波の届くところでもう一度ためしてください。")}
-  finally{to.done()}
-  if(!r.ok)throw new Error(netErr(r.status));
-  const d=await r.json();
-  if(!d.ok)throw new Error(d.error==="key"?"合言葉が違います":"保存できませんでした");
-  return d;
-}
+const apiGet =()=>retrying(()=>{const c=CFG();return call(c.url+q(c.key))});
+const apiPost=b =>retrying(()=>{const c=CFG();return call(c.url,{method:"POST",
+  headers:{"Content-Type":"text/plain;charset=utf-8"},
+  body:JSON.stringify(Object.assign({key:c.key},b))})});
 
 const timers={};
 function saveMonth(ym){
