@@ -69,6 +69,17 @@ header.hero{background:var(--hero);color:var(--hero-fg);margin-inline:-16px;padd
 .ch b{font-weight:700;font-size:16px;min-width:0;text-wrap:balance}
 .ch small{color:var(--muted);font-size:12px;white-space:nowrap}
 .cg{display:grid;grid-template-columns:auto 1fr 1fr;gap:10px;align-items:end}
+.cg.one{grid-template-columns:auto 1fr}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--surface);
+    border:1px solid var(--line);border-radius:var(--r);padding:11px 14px;margin-top:14px}
+.sw span{font-size:13px;color:var(--muted)}
+.sw b{display:block;font-size:14px;color:var(--fg);font-weight:600}
+.sw button{flex:none;width:52px;height:30px;border-radius:999px;border:1px solid var(--line);
+    background:var(--sunk);position:relative;cursor:pointer}
+.sw button i{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
+    background:var(--muted);transition:left .18s,background .18s}
+.sw button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.sw button[aria-pressed="true"] i{left:27px;background:var(--accent)}
 .cg label,.fld label{display:block;font-size:11px;color:var(--muted);margin-bottom:3px}
 .prev{font-size:20px;padding:0 4px 6px;min-width:44px}
 .step{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;background:var(--sunk);height:44px}
@@ -155,7 +166,7 @@ tfoot td{font-weight:700;border-bottom:0}
 const TAX=1.1;                 /* 単価は税込で持つ。在庫管理表も請求書も税込のため */
 const BAND=[8,12];             /* 材料費率の目安（美容室の一般的な水準） */
 const S={stores:[],store:null,items:{},months:{},tab:"input",cur:null,ready:false,
-         who:"",canWrite:true,mode:"loading",err:"",
+         who:"",canWrite:true,mode:"loading",err:"",showBuy:false,
          confirmDel:null,editing:null,paste:null};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -384,12 +395,14 @@ function cardInner(it){
   else if(!c.priced)foot='<span>使用 <strong class="num">'+qty(c.use)+'</strong></span><span class="flag">単価が未設定なので金額に入りません</span>';
   else foot='<span'+(c.use<0?' class="neg"':"")+'>使用 <strong class="num">'+qty(c.use)+'</strong></span>'+
             '<span>材料費 <strong class="num">'+yen(c.useAmt)+"</strong>（税抜 <span class=\"num\">"+yen(ex(c.useAmt))+"</span>）</span>";
+  const buy='<div><label for="in-'+it.id+'">仕入れ</label><div class="step"><button '+dis+' data-act="dec" data-f="in" data-id="'+it.id+'" aria-label="仕入れを減らす">−</button><input '+dis+' id="in-'+it.id+'" inputmode="decimal" type="number" min="0" step="0.5" data-f="in" data-id="'+it.id+'" value="'+(c.inn||"")+'" placeholder="-"><button '+dis+' data-act="inc" data-f="in" data-id="'+it.id+'" aria-label="仕入れを増やす">＋</button></div></div>';
   return '<div class="ch"><b>'+esc(it.name)+'</b><small class="num">'+price+"</small></div>"+
-  '<div class="cg">'+
+  '<div class="cg'+(S.showBuy?"":" one")+'">'+
     '<div><label>前月在庫</label><div class="prev num">'+qty(c.prev)+"</div></div>"+
-    '<div><label for="in-'+it.id+'">仕入れ</label><div class="step"><button '+dis+' data-act="dec" data-f="in" data-id="'+it.id+'" aria-label="仕入れを減らす">−</button><input '+dis+' id="in-'+it.id+'" inputmode="decimal" type="number" min="0" step="0.5" data-f="in" data-id="'+it.id+'" value="'+(c.inn||"")+'" placeholder="-"><button '+dis+' data-act="inc" data-f="in" data-id="'+it.id+'" aria-label="仕入れを増やす">＋</button></div></div>'+
+    (S.showBuy?buy:"")+
     '<div><label for="end-'+it.id+'">月末在庫</label><div class="step"><button '+dis+' data-act="dec" data-f="end" data-id="'+it.id+'" aria-label="月末在庫を減らす">−</button><input '+dis+' id="end-'+it.id+'" inputmode="decimal" type="number" min="0" step="0.5" data-f="end" data-id="'+it.id+'" value="'+(c.counted?qty(c.end):"")+'" placeholder="未"><button '+dis+' data-act="inc" data-f="end" data-id="'+it.id+'" aria-label="月末在庫を増やす">＋</button></div></div>'+
   "</div>"+
+  (!S.showBuy&&c.inn?'<div class="cf"><span>仕入れ <strong class="num">'+qty(c.inn)+"</strong></span></div>":"")+
   '<div class="cf">'+foot+"</div>"+
   (c.counted&&c.priced&&c.use<0?'<div class="cf"><span class="neg">在庫が前月より増えています。仕入れを入れると直ります</span></div>':"");
 }
@@ -397,7 +410,8 @@ function renderInput(){
   if(!S.ready)return '<div class="empty"><b>読み込んでいます</b>店舗の品目と今月の入力内容を表示します</div>';
   if(!ITEMS().length)return '<div class="empty"><b>'+esc(storeName())+'の品目がまだありません</b>「品目」タブで材料と単価を登録すると、ここで棚卸しを入力できます</div>';
   const t=totals(S.cur);
-  let h="";
+  let h='<div class="sw"><span><b>仕入れも入力する</b>ふだんは月末在庫だけで大丈夫です</span>'+
+        '<button id="toggleBuy" role="switch" aria-pressed="'+(S.showBuy?"true":"false")+'" aria-label="仕入れの入力欄を出す"><i></i></button></div>';
   if(t.neg>0)h+='<p class="note">使用量がマイナスの品目が'+t.neg+'件あります。その月の仕入れを入れてください。入れるまで材料費は少なく出ます。</p>';
   for(const c of catsInOrder()){
     const its=ITEMS().filter(i=>(i.cat||"その他")===c);if(!its.length)continue;
@@ -628,6 +642,7 @@ $("#view").addEventListener("click",async e=>{
     lsSet("who",w);S.who=w;load();return}
   if(t.id==="reload"){load();return}
   if(t.id==="copyShare"){copyText(shareLink());return}
+  if(t.id==="toggleBuy"){S.showBuy=!S.showBuy;lsSet("showBuy",S.showBuy?"1":"");render();return}
   if(t.id==="copyReport"){copyText(reportText());return}
   if(t.id==="openPaste"){S.paste={step:"edit",text:""};render();return}
   if(t.id==="pasteNo"){S.paste=null;render();return}
@@ -720,6 +735,7 @@ async function load(){
 }
 readLink();
 S.who=lsGet("who");
+S.showBuy=lsGet("showBuy")==="1";
 if(!CFG().url)S.mode="setup";
 else if(!S.who)S.mode="name";
 render();
