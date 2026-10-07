@@ -92,6 +92,14 @@ header.hero{background:var(--hero);color:var(--hero-fg);margin-inline:-16px;padd
 .cf strong{color:var(--fg);font-weight:600}
 .cf .neg{color:var(--bad)}
 .flag{font-size:12px;color:var(--warn)}
+.jump{position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(72px + env(safe-area-inset-bottom,0px));z-index:6;
+  background:var(--accent);color:var(--accent-ink);border:0;border-radius:999px;
+  padding:11px 20px;font:600 13px var(--f-body);cursor:pointer;
+  box-shadow:0 4px 16px rgba(0,0,0,.28)}
+.done-note{background:color-mix(in srgb,var(--ok) 14%,var(--surface));
+  border-color:color-mix(in srgb,var(--ok) 40%,var(--line))}
+.done-note h2{color:var(--ok)}
 .empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);padding:28px 18px;text-align:center;color:var(--muted);margin-top:18px}
 .empty b{display:block;color:var(--fg);font-size:16px;margin-bottom:4px}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom,0px);z-index:5}
@@ -400,7 +408,19 @@ function cardInner(it){
   "</div>"+
   (!S.showBuy&&c.inn?'<div class="cf"><span>仕入れ <strong class="num">'+qty(c.inn)+"</strong></span></div>":"")+
   '<div class="cf">'+foot+"</div>"+
-  (c.counted&&c.priced&&c.use<0?'<div class="cf"><span class="neg">在庫が前月より増えています。仕入れを入れると直ります</span></div>':"");
+  (c.counted&&c.priced&&c.use<0?'<div class="cf"><span class="neg">在庫が前月より増えています。仕入れを入れると直ります</span></div>':"")+
+  (odd(c)?'<div class="cf"><span class="flag">先月は '+qty(c.prev)+' でした。'+qty(c.end)+
+    ' で合っていますか（数え間違い・単位ちがいがよくあります）</span></div>':"");
+}
+// 減りすぎは数え間違い（桁の打ち間違い・単位ちがい）のことが多い。
+// **止めない。**本当に使い切る月もある。声をかけすぎると読まれなくなるので、
+// 「10以上あったものが1/5以下になった」ときだけにする。
+// 4→0 のような小さい品目で鳴らすと、毎月ほぼ全部に出て邪魔になる。
+const ODD_MIN=10, ODD_RATIO=5;
+function odd(c){
+  if(!c.counted||c.use==null||c.use<0)return false;
+  const base=c.prev+c.inn;
+  return base>=ODD_MIN&&c.end<=base/ODD_RATIO;
 }
 function renderInput(){
   if(!S.ready)return '<div class="empty"><b>読み込んでいます</b>店舗の品目と今月の入力内容を表示します</div>';
@@ -416,8 +436,14 @@ function renderInput(){
   for(const it of ITEMS())
     h+='<div class="card'+(calc(it,S.cur).counted?" done":"")+'" data-card="'+it.id+'">'+cardInner(it)+"</div>";
   h+="</div>";
-  h+='<section class="panel"><h2>数え終わったら</h2>'+
-     '<p class="note" style="padding:0">'+t.done+"/"+t.n+'件を入力済み。'+esc(whoLine(S.cur))+'。<br>そのままLINEに貼れる形で報告文をコピーします。</p>'+
+  const rest=ITEMS().filter(i=>!calc(i,S.cur).counted);
+  if(rest.length)h+='<button class="jump" id="jumpNext">次の未入力へ（残り'+rest.length+'）</button>';
+  h+='<section class="panel'+(rest.length?"":" done-note")+'"><h2>'+
+     (rest.length?"数え終わったら":"数え終わりました")+"</h2>"+
+     '<p class="note" style="padding:0">'+
+     (rest.length?t.done+"/"+t.n+"件まで入力しました。残り"+rest.length+"件です。"
+                 :"全"+t.n+"件、入力できました。")+
+     "<br>"+esc(whoLine(S.cur))+'。そのままLINEに貼れる形で報告文をコピーします。</p>'+
      '<div class="row"><button class="btn pri" id="copyReport">棚卸しの報告をコピー</button></div></section>';
   h+='<section class="panel"><h2>過去の月を取り込む</h2>'+
      '<p class="note" style="padding:0">LINEで来た棚卸しの文面があれば、貼り付けて一括で入れられます。ふだんは使いません。</p>'+
@@ -445,6 +471,9 @@ function refreshCard(id,keepFocus){
     if(cur.length&&fresh.length)cur[0].outerHTML=fresh[0].outerHTML;
   }else el.innerHTML=cardInner(it);
   el.classList.toggle("done",c.counted);renderHeader();
+  const b=document.getElementById("jumpNext");
+  if(b){const n=ITEMS().filter(i=>!calc(i,S.cur).counted).length;
+    if(n)b.textContent="次の未入力へ（残り"+n+"）";else b.remove()}
 }
 
 /* ---- paste the LINE stocktake ---- */
@@ -639,6 +668,13 @@ $("#view").addEventListener("click",async e=>{
   if(t.id==="reload"){load();return}
   if(t.id==="copyShare"){copyText(shareLink());return}
   if(t.id==="toggleBuy"){S.showBuy=!S.showBuy;lsSet("showBuy",S.showBuy?"1":"");render();return}
+  if(t.id==="jumpNext"){
+    const next=ITEMS().find(i=>!calc(i,S.cur).counted);
+    if(!next)return;
+    const el=document.querySelector('[data-card="'+next.id+'"]');
+    if(el){el.scrollIntoView({block:"center",behavior:"smooth"});
+      const inp=el.querySelector('input[data-f="end"]');if(inp)setTimeout(()=>inp.focus(),400)}
+    return}
   if(t.id==="copyReport"){copyText(reportText());return}
   if(t.id==="openPaste"){S.paste={step:"edit",text:""};render();return}
   if(t.id==="pasteNo"){S.paste=null;render();return}
