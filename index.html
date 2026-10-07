@@ -241,13 +241,12 @@ function stockValue(ym){
 }
 function reportText(){
   const L=["【"+storeName()+"　棚卸し】"+ymLabel(S.cur),""];
-  for(const c of catsInOrder()){
-    const its=ITEMS().filter(i=>(i.cat||"その他")===c&&calc(i,S.cur).counted);
-    if(!its.length)continue;
-    L.push(c);
-    for(const it of its)L.push(it.name+"　"+qty(calc(it,S.cur).end));
-    L.push("");
+  // 並びは入力と同じ（棚を回る順）。受け取る側がいつものLINEと同じ順で読める
+  for(const it of ITEMS()){
+    const c=calc(it,S.cur);
+    if(c.counted)L.push(it.name+"　"+qty(c.end));
   }
+  L.push("");
   const t=totals(S.cur);
   L.push("棚卸額 合計　"+yen(stockValue(S.cur))+"（税込）");
   if(S.who)L.push("記録　"+S.who);
@@ -410,13 +409,13 @@ function renderInput(){
   let h='<div class="sw"><span><b>仕入れも入力する</b>ふだんは月末在庫だけで大丈夫です</span>'+
         '<button id="toggleBuy" role="switch" aria-pressed="'+(S.showBuy?"true":"false")+'" aria-label="仕入れの入力欄を出す"><i></i></button></div>';
   if(t.neg>0)h+='<p class="note">使用量がマイナスの品目が'+t.neg+'件あります。その月の仕入れを入れてください。入れるまで材料費は少なく出ます。</p>';
-  for(const c of catsInOrder()){
-    const its=ITEMS().filter(i=>(i.cat||"その他")===c);if(!its.length)continue;
-    const done=its.filter(i=>calc(i,S.cur).counted).length;
-    h+='<div class="cat"><span>'+esc(c)+'</span><span class="num">'+done+"/"+its.length+'</span></div><div class="list">';
-    for(const it of its)h+='<div class="card'+(calc(it,S.cur).counted?" done":"")+'" data-card="'+it.id+'">'+cardInner(it)+"</div>";
-    h+="</div>";
-  }
+  // **並びはシートの行順のまま。** カテゴリで束ねると棚を回る順と変わり、
+  // 画面を行ったり来たりすることになる（LINEの報告順＝回る順に合わせてある）。
+  // 順番を変えたいときは、スプレッドシートの「品目」シートで行を動かす。
+  h+='<div class="list" style="margin-top:14px">';
+  for(const it of ITEMS())
+    h+='<div class="card'+(calc(it,S.cur).counted?" done":"")+'" data-card="'+it.id+'">'+cardInner(it)+"</div>";
+  h+="</div>";
   h+='<section class="panel"><h2>数え終わったら</h2>'+
      '<p class="note" style="padding:0">'+t.done+"/"+t.n+'件を入力済み。'+esc(whoLine(S.cur))+'。<br>そのままLINEに貼れる形で報告文をコピーします。</p>'+
      '<div class="row"><button class="btn pri" id="copyReport">棚卸しの報告をコピー</button></div></section>';
