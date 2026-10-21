@@ -25,18 +25,29 @@ var TZ  = 'Asia/Tokyo';
 
 // **文字として入れる列。** これを指定しないとスプレッドシートが勝手に変換する。
 //   「2026-08」→ 日付、「6%」→ 0.06 になり、月のキーも別名も壊れる（実際に壊れた）。
-var TEXT_COLS = { '店舗': [1, 2], '品目': [1, 2, 3, 4, 7], '棚卸': [1, 2, 3, 4], '月次': [1, 2, 7, 8] };
+var TEXT_COLS = { '店舗': [1, 2], '品目': [1, 2, 3, 4, 7], '棚卸': [1, 2, 3, 4], '月次': [1, 2, 7, 8],
+  'アクセス': [1, 2, 3, 4], 'アンケート': [1, 2, 3, 4, 5, 6] };
 
 var SHEETS = {
   店舗: ['id', '名前'],
   品目: ['店舗', 'id', '品目名', 'カテゴリ', '単価(税込)', '初期在庫', '別名'],
   棚卸: ['店舗', '月', '品目id', '品目名', '仕入', '月末在庫'],
-  月次: ['店舗', '月', '売上(税込)', '材料費(税込)', '材料費率', '棚卸額(税込)', '記録者', '更新日時']
+  月次: ['店舗', '月', '売上(税込)', '材料費(税込)', '材料費率', '棚卸額(税込)', '記録者', '更新日時'],
+  // **管理者だけが見る。** ページには出さない（スプレッドシートを開けるのは管理者だけ）。
+  // 誰がいつ使ったかではなく、**棚卸しが終わったかを確かめるため**のもの。
+  // 1人が何度も開くので、同じ人・同じ日・同じ操作は1行にまとめる（毎回足すと読めなくなる）。
+  アクセス: ['日時', '名前', '店舗', '操作', '回数'],
+  // アンケート。**1人1行で上書きする**（出し直せるように）。
+  // 匿名にしない——自主の係は本人が引き受けるのが狙いで、
+  // 匿名だと希望は集まるが責任が生まれない（2026-10-23 MTG）。
+  アンケート: ['日時', '店舗', '名前', '設問', '希望', '自分で決めた分量']
 };
 
 function setup() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   Object.keys(SHEETS).forEach(function (name) {
+    // **アクセス履歴は消さない。** setup() は作り直し用だが、履歴まで消すと記録が飛ぶ
+    if (name === 'アクセス' && ss.getSheetByName(name)) return;
     var sh = ss.getSheetByName(name) || ss.insertSheet(name);
     sh.clear();
     sh.getRange(1, 1, 1, SHEETS[name].length).setValues([SHEETS[name]]).setFontWeight('bold');
@@ -84,10 +95,65 @@ function json_(o) {
 function ok_(key) { return !KEY || String(key || '') === KEY; }
 function num_(v) { return (v === '' || v === null || v === undefined) ? null : Number(v); }
 
+/* ---- アンケート ---- */
+function saveSurvey_(b) {
+  var who = String(b.who || '').trim();
+  if (!who) return { ok: false, error: 'name' };     // 記名でないと受け取らない
+  var store = String(b.store || '');
+  var sh = sheet_('アンケート');
+  var stamp = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
+
+  // **同じ人の前の回答は消してから入れ直す。** 出し直せないと、書き間違えたまま残る
+  var last = sh.getLastRow();
+  if (last > 1) {
+    var rows = sh.getRange(2, 1, last - 1, SHEETS['アンケート'].length).getValues();
+    for (var i = rows.length - 1; i >= 0; i--) {
+      if (String(rows[i][2]) === who && String(rows[i][1]) === store) sh.deleteRow(i + 2);
+    }
+  }
+  var body = (b.answers || []).map(function (a) {
+    return [stamp, store, who, String(a.q || ''), String(a.want || ''), String(a.how || '')];
+  });
+  if (!body.length) return { ok: true, at: stamp, n: 0 };
+  var from = sh.getLastRow() + 1;
+  sh.getRange(from, 1, body.length, 6).setNumberFormat('@');
+  sh.getRange(from, 1, body.length, 6).setValues(body);
+  log_(who, store, 'アンケートを出した');
+  return { ok: true, at: stamp, n: body.length };
+}
+
+/* ---- アクセス履歴（管理者だけが見る） ---- */
+function log_(who, store, op) {
+  who = String(who || '').trim();
+  if (!who) return;                       // 名前を入れる前の読み込みは数えない
+  try {
+    var sh = sheet_('アクセス');
+    var today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+    var last = sh.getLastRow();
+    // 同じ人・同じ日・同じ操作なら、最終行を更新して回数を足す（行が増え続けないように）
+    if (last > 1) {
+      var r = sh.getRange(last, 1, 1, 5).getValues()[0];
+      if (String(r[1]) === who && String(r[2]) === String(store || '') &&
+          String(r[3]) === op && String(r[0]).slice(0, 10) === today) {
+        sh.getRange(last, 1).setValue(Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'));
+        sh.getRange(last, 5).setValue(Number(r[4] || 1) + 1);
+        return;
+      }
+    }
+    sh.getRange(last + 1, 1, 1, 5).setNumberFormat('@');
+    sh.getRange(last + 1, 1, 1, 5).setValues([[
+      Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm'),
+      who, String(store || ''), op, 1]]);
+  } catch (err) {
+    // **記録に失敗しても本体は止めない。** 棚卸しが入らなくなる方が困る
+  }
+}
+
 /* ---- 読み ---- */
 function doGet(e) {
   var p = (e && e.parameter) || {};
   if (!ok_(p.key)) return json_({ ok: false, error: 'key' });
+  log_(p.who, p.store, '開いた');
 
   var stores = rows_('店舗').filter(function (r) { return r[0] !== ''; })
     .map(function (r) { return { id: String(r[0]), name: String(r[1] || r[0]) }; });
@@ -134,6 +200,11 @@ function doPost(e) {
   var body = {};
   try { body = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (err) { }
   if (!ok_(body.key)) return json_({ ok: false, error: 'key' });
+
+  if (body.op === 'survey') return json_(saveSurvey_(body));
+
+  var OP = { month: '棚卸しを保存', items: '品目を編集', stores: '店舗を編集' };
+  if (OP[body.op]) log_(body.who, body.store, OP[body.op]);
 
   if (body.op === 'month') return json_(saveMonth_(body));
   if (body.op === 'items') return json_(saveItems_(body));
