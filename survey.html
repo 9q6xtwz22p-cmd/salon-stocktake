@@ -1,0 +1,146 @@
+<!doctype html><html lang="ja"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>役割分担について</title>
+<style>
+:root{--bg:#faf9f5;--ink:#1b1b1b;--sub:#6b6b6b;--line:#e2e0d6;--accent:#4a45c2;--mark:#f6e7c2}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.75 "Hiragino Sans","Noto Sans JP",sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:20px 16px 120px}
+h1{font-size:21px;margin:0 0 4px}
+.lead{color:var(--sub);font-size:14px;margin:0 0 18px;padding-bottom:16px;border-bottom:2px solid var(--ink)}
+b.hi{background:linear-gradient(transparent 62%,var(--mark) 62%)}
+h2{font-size:17px;margin:26px 0 6px}
+.note{color:var(--sub);font-size:13.5px;margin:4px 0 14px}
+label{display:block;font-weight:700;font-size:14px;margin:0 0 6px}
+input,textarea,select{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--line);
+  border-radius:10px;background:#fff;color:var(--ink)}
+textarea{min-height:92px;resize:vertical}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin:0 0 12px}
+.card h3{margin:0 0 2px;font-size:15.5px}
+.card .d{color:var(--sub);font-size:13px;margin:0 0 10px}
+.pick{display:flex;gap:8px;margin:0 0 10px}
+.pick button{flex:1;padding:10px 0;border:1px solid var(--line);background:#fff;border-radius:10px;
+  font:inherit;cursor:pointer}
+.pick button[aria-pressed=true]{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+.bar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);
+  padding:12px 16px;display:flex;gap:10px;align-items:center}
+.bar .s{flex:1;font-size:13px;color:var(--sub)}
+.bar button{padding:13px 22px;border:0;border-radius:10px;background:var(--accent);color:#fff;
+  font:700 16px/1 inherit;cursor:pointer}
+.bar button:disabled{background:#bdbbd4}
+.done{text-align:center;padding:60px 20px}
+.done h1{font-size:22px}
+.err{background:#fbeeea;border-left:4px solid #b3261e;padding:10px 12px;border-radius:0 8px 8px 0;
+  font-size:14px;margin:12px 0}
+@media (prefers-color-scheme:dark){
+ :root{--bg:#17171a;--ink:#ececf0;--sub:#9b9ba6;--line:#33333c;--mark:#4a4320}
+ input,textarea,select,.card,.bar,.pick button{background:#1f1f24}
+}
+</style></head><body>
+<div class="wrap" id="app"></div>
+<script>
+/* 保存先は棚卸しツールと同じ Apps Script。設定は共有リンク(#s=)から取り込む。
+   **リポジトリにURLを書かない**（公開リポジトリなので）。 */
+const P="tanaoroshi-";
+const lsGet=k=>{try{return localStorage.getItem(P+k)||""}catch(e){return ""}};
+const lsSet=(k,v)=>{try{localStorage.setItem(P+k,v)}catch(e){}};
+(function(){const m=location.hash.match(/^#s=(.+)$/);if(!m)return;
+  try{const [u,k]=decodeURIComponent(escape(atob(m[1]))).split("\u0001");
+    if(u)lsSet("url",u);lsSet("key",k||"");history.replaceState(null,"",location.pathname)}catch(e){}})();
+
+const Q=[
+ {q:"スタイル投稿",d:"HPB・minimo・Instagram"},
+ {q:"ブログ投稿",d:"HPBブログ"},
+ {q:"キャンペーン企画・イベント",d:"企画から実行まで"}];
+const S={who:lsGet("who"),store:"MOND",ans:{},free1:"",free2:"",extra:[{q:"",how:""},{q:"",how:""}],
+         busy:false,done:false,err:""};
+
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function view(){
+  if(S.done)return `<div class="done"><h1>ありがとうございました</h1>
+    <p class="note">出し直したいときは、同じリンクをもう一度開いて書き直してください。<br>
+    前の回答は上書きされます。</p></div>`;
+  const cards=Q.map((x,i)=>{
+    const a=S.ans[x.q]||{};
+    return `<div class="card"><h3>${esc(x.q)}</h3><p class="d">${esc(x.d)}</p>
+      <div class="pick" data-q="${esc(x.q)}">
+        ${["◎ やりたい","○ できる","—"].map(l=>
+          `<button type="button" data-v="${esc(l)}" aria-pressed="${a.want===l}">${esc(l)}</button>`).join("")}
+      </div>
+      <label>何を・いつまでに・どのくらい</label>
+      <textarea data-how="${esc(x.q)}" placeholder="例）週2枚／日曜までに">${esc(a.how||"")}</textarea>
+      </div>`}).join("");
+  const extra=S.extra.map((e,i)=>`<div class="card">
+      <label>自分で作りたい係 ${i+1}</label>
+      <input data-ex="${i}" data-f="q" placeholder="やりたいことがあれば" value="${esc(e.q)}">
+      <label style="margin-top:10px">何を・いつまでに・どのくらい</label>
+      <textarea data-ex="${i}" data-f="how">${esc(e.how)}</textarea></div>`).join("");
+  return `<h1>役割分担について</h1>
+   <p class="lead"><b class="hi">みんなで協力して、お店の環境を良くしていきたい。</b> そのための紙です。</p>
+   ${S.err?`<div class="err">${esc(S.err)}</div>`:""}
+   <div class="card"><label for="who">お名前</label>
+     <input id="who" value="${esc(S.who)}" placeholder="記名でお願いします" autocomplete="name">
+     <p class="d" style="margin:8px 0 0">引き受けた人が分からないと進められないので、お名前をお願いします。</p>
+     <label for="store" style="margin-top:12px">お店</label>
+     <select id="store">${["MOND","OMA"].map(s=>`<option ${S.store===s?"selected":""}>${s}</option>`).join("")}</select>
+   </div>
+
+   <h2>1. 自分で手を挙げて持つ係</h2>
+   <p class="note">やりたいものを選んでください。やらないものは「—」のままで構いません。<br>
+   <b class="hi">「何を・いつまでに・どのくらい」がいちばん大事です。</b>
+   自分で決めた分量を書いてください。ここが空だと、引き受けた本人も何をすれば達成か分からなくなります。</p>
+   ${cards}${extra}
+
+   <h2>2. 運営が決めて回す係について</h2>
+   <p class="note">発注3つと週次清掃は、止まると店が困るので今までどおり持ち回りにします。<br>
+   やりにくい・変えたほうがいいと思うことがあれば。</p>
+   <div class="card"><textarea id="free1">${esc(S.free1)}</textarea></div>
+
+   <h2>3. そのほか</h2>
+   <p class="note">気になっていること、要望、提案。<b class="hi">係のことでなくて構いません。</b><br>
+   できない・やりたくないも、そのまま書いて大丈夫です。</p>
+   <div class="card"><textarea id="free2">${esc(S.free2)}</textarea></div>
+
+   <div class="bar"><span class="s">${S.busy?"送っています…":"書けるところだけで大丈夫です"}</span>
+     <button id="send" ${S.busy?"disabled":""}>出す</button></div>`;
+}
+function render(){document.getElementById("app").innerHTML=view();bind()}
+function bind(){
+  const el=document.getElementById("app");
+  el.querySelectorAll(".pick button").forEach(b=>b.onclick=()=>{
+    const q=b.closest(".pick").dataset.q;
+    S.ans[q]=Object.assign({},S.ans[q],{want:b.dataset.v});render()});
+  el.querySelectorAll("[data-how]").forEach(t=>t.oninput=()=>{
+    const q=t.dataset.how;S.ans[q]=Object.assign({},S.ans[q],{how:t.value})});
+  el.querySelectorAll("[data-ex]").forEach(t=>t.oninput=()=>{
+    S.extra[+t.dataset.ex][t.dataset.f]=t.value});
+  const w=document.getElementById("who");if(w)w.oninput=()=>{S.who=w.value};
+  const st=document.getElementById("store");if(st)st.onchange=()=>{S.store=st.value};
+  const f1=document.getElementById("free1");if(f1)f1.oninput=()=>{S.free1=f1.value};
+  const f2=document.getElementById("free2");if(f2)f2.oninput=()=>{S.free2=f2.value};
+  const s=document.getElementById("send");if(s)s.onclick=send;
+}
+async function send(){
+  S.err="";
+  if(!S.who.trim()){S.err="お名前を入れてください。記名でお願いしています。";render();
+    window.scrollTo({top:0,behavior:"smooth"});return}
+  const url=lsGet("url");
+  if(!url){S.err="保存先が設定されていません。管理者から受け取ったリンクを開いてください。";render();return}
+  const answers=Q.map(x=>({q:x.q,want:(S.ans[x.q]||{}).want||"",how:(S.ans[x.q]||{}).how||""}))
+    .concat(S.extra.filter(e=>e.q.trim()).map(e=>({q:"（提案）"+e.q,want:"◎ やりたい",how:e.how})));
+  if(S.free1.trim())answers.push({q:"回す係について",want:"",how:S.free1});
+  if(S.free2.trim())answers.push({q:"そのほか",want:"",how:S.free2});
+  S.busy=true;render();
+  try{
+    const k=lsGet("key");
+    // **Content-Type は text/plain。** application/json だとCORSの事前確認が走って弾かれる
+    const r=await fetch(url,{method:"POST",headers:{"Content-Type":"text/plain"},
+      body:JSON.stringify({op:"survey",key:k,who:S.who.trim(),store:S.store,answers})});
+    const j=await r.json();
+    if(!j.ok)throw new Error(j.error==="name"?"お名前が空です":"保存できませんでした");
+    lsSet("who",S.who.trim());S.done=true;
+  }catch(e){S.err="送れませんでした。電波を確かめて、もう一度「出す」を押してください。（"+e.message+"）"}
+  S.busy=false;render();
+}
+render();
+</script></body></html>
