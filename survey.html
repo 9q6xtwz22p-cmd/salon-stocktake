@@ -48,72 +48,88 @@ const lsSet=(k,v)=>{try{localStorage.setItem(P+k,v)}catch(e){}};
   try{const [u,k]=decodeURIComponent(escape(atob(m[1]))).split("\u0001");
     if(u)lsSet("url",u);lsSet("key",k||"");history.replaceState(null,"",location.pathname)}catch(e){}})();
 
-const Q=[
- {q:"スタイル投稿",d:"HPB・minimo・Instagram"},
- {q:"ブログ投稿",d:"HPBブログ"},
- {q:"キャンペーン企画・イベント",d:"企画から実行まで"}];
-const S={who:lsGet("who"),store:"MOND",ans:{},free1:"",free2:"",extra:[{q:"",how:""},{q:"",how:""}],
-         busy:false,done:false,err:""};
+// **選択肢から選ばせない。** 「—」を置くと、関わらない人は関わらないままになる。
+// 自分の言葉で「何をやるか」「なぜやるか」を書いてもらう（2026-10-21 方針変更）。
+const S={who:lsGet("who"),store:"MOND",
+         a1:{what:"",why:"",how:""},a2:{what:"",why:"",how:""},
+         free1:"",free2:"",busy:false,done:false,err:""};
 
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function view(){
   if(S.done)return `<div class="done"><h1>ありがとうございました</h1>
-    <p class="note">出し直したいときは、同じリンクをもう一度開いて書き直してください。<br>
+    <p class="note">書き直したいときは、同じリンクをもう一度開いてください。<br>
     前の回答は上書きされます。</p></div>`;
-  const cards=Q.map((x,i)=>{
-    const a=S.ans[x.q]||{};
-    return `<div class="card"><h3>${esc(x.q)}</h3><p class="d">${esc(x.d)}</p>
-      <div class="pick" data-q="${esc(x.q)}">
-        ${["◎ やりたい","○ できる","—"].map(l=>
-          `<button type="button" data-v="${esc(l)}" aria-pressed="${a.want===l}">${esc(l)}</button>`).join("")}
-      </div>
-      <label>何を・いつまでに・どのくらい</label>
-      <textarea data-how="${esc(x.q)}" placeholder="例）週2枚／日曜までに">${esc(a.how||"")}</textarea>
-      </div>`}).join("");
-  const extra=S.extra.map((e,i)=>`<div class="card">
-      <label>自分で作りたい係 ${i+1}</label>
-      <input data-ex="${i}" data-f="q" placeholder="やりたいことがあれば" value="${esc(e.q)}">
-      <label style="margin-top:10px">何を・いつまでに・どのくらい</label>
-      <textarea data-ex="${i}" data-f="how">${esc(e.how)}</textarea></div>`).join("");
-  return `<h1>役割分担について</h1>
-   <p class="lead"><b class="hi">みんなで協力して、お店の環境を良くしていきたい。</b> そのための紙です。</p>
+  const f=(k,g,label,ph,ta)=>`<label>${esc(label)}</label>`+
+    (ta?`<textarea data-a="${k}" data-f="${g}" placeholder="${esc(ph||"")}">${esc(S[k][g])}</textarea>`
+       :`<input data-a="${k}" data-f="${g}" placeholder="${esc(ph||"")}" value="${esc(S[k][g])}">`);
+  return `<h1>お店のためにできること</h1>
+   <p class="lead">まず、いまのMONDの状態をお伝えします。</p>
    ${S.err?`<div class="err">${esc(S.err)}</div>`:""}
+
+   <div class="card"><h3>① 新規は来ている。でも58%が1回で終わっている</h3>
+     <p class="d">台帳3,380人のうち <b class="hi">1,968人が「1回来たきり」</b>。
+     新規を取る力は足りています。止まっているのは2回目です。</p></div>
+
+   <div class="card"><h3>② 足りていないのはスタイル写真だけ</h3>
+     <p class="d">千葉駅エリア193軒との実測。<br>
+     ブログ 2,561件＝<b>22位/175軒</b>（上位13%）<br>
+     口コミ 875件＝<b>27位/172軒</b>（上位16%）<br>
+     <b class="hi">スタイル写真 499件＝口コミ上位21軒中16位</b>（中央値1,000件）<br>
+     ブログも口コミもよそより出せています。<b class="hi">少ないのはスタイル写真だけ</b>。
+     お客様が最初に見るところです。</p></div>
+
+   <div class="card"><h3>③ 平日の席が月109人ぶん空いている</h3>
+     <p class="d">金額にすると <b class="hi">月110万円</b>。
+     埋まったぶんは、そのまま担当の取り分になります。</p></div>
+
+   <h2>つまり</h2>
+   <p class="note"><b class="hi">新規を増やすより、「2回目につなげる」「スタイル写真を出す」「平日を埋める」ほうが効きます。</b><br><br>
+   発注や清掃は止まると営業ができないので、今までどおり全員で回します。
+   やってみたい人がいれば、そちらに入ってもらっても構いません。</p>
+
    <div class="card"><label for="who">お名前</label>
      <input id="who" value="${esc(S.who)}" placeholder="記名でお願いします" autocomplete="name">
-     <p class="d" style="margin:8px 0 0">引き受けた人が分からないと進められないので、お名前をお願いします。</p>
      <label for="store" style="margin-top:12px">お店</label>
      <select id="store">${["MOND","OMA"].map(s=>`<option ${S.store===s?"selected":""}>${s}</option>`).join("")}</select>
    </div>
 
-   <h2>1. 自分で手を挙げて持つ係</h2>
-   <p class="note">やりたいものを選んでください。やらないものは「—」のままで構いません。<br>
-   <b class="hi">「何を・いつまでに・どのくらい」がいちばん大事です。</b>
-   自分で決めた分量を書いてください。ここが空だと、引き受けた本人も何をすれば達成か分からなくなります。</p>
-   ${cards}${extra}
+   <h2>お店のために、あなたができることはありますか</h2>
+   <p class="note"><b class="hi">1つで構いません。</b>大きなことでなくて大丈夫です。<br>
+   「スタイルを週2枚撮る」「バックルームの棚を直す」「新しいお客様に次回の話をしてみる」——
+   なんでも構いません。</p>
 
-   <h2>2. 運営が決めて回す係について</h2>
-   <p class="note">発注3つと週次清掃は、止まると店が困るので今までどおり持ち回りにします。<br>
-   やりにくい・変えたほうがいいと思うことがあれば。</p>
+   <div class="card">
+     ${f("a1","what","やること","",false)}
+     <div style="height:10px"></div>
+     ${f("a1","why","なぜそれをやりたいか","",true)}
+     <div style="height:10px"></div>
+     ${f("a1","how","何を・いつまでに・どのくらい","例）週2枚／日曜までに",false)}
+   </div>
+
+   <p class="note">もう1つあれば（任意）</p>
+   <div class="card">
+     ${f("a2","what","やること","",false)}
+     <div style="height:10px"></div>
+     ${f("a2","why","なぜそれをやりたいか","",true)}
+     <div style="height:10px"></div>
+     ${f("a2","how","何を・いつまでに・どのくらい","",false)}
+   </div>
+
+   <h2>運営が回す係について</h2>
+   <p class="note">発注3つと週次清掃。やりにくい・変えたほうがいいと思うことがあれば。</p>
    <div class="card"><textarea id="free1">${esc(S.free1)}</textarea></div>
 
-   <h2>3. そのほか</h2>
-   <p class="note">気になっていること、要望、提案。<b class="hi">係のことでなくて構いません。</b><br>
-   できない・やりたくないも、そのまま書いて大丈夫です。</p>
+   <h2>そのほか</h2>
+   <p class="note">気になっていること、要望、提案。</p>
    <div class="card"><textarea id="free2">${esc(S.free2)}</textarea></div>
 
-   <div class="bar"><span class="s">${S.busy?"送っています…":"書けるところだけで大丈夫です"}</span>
+   <div class="bar"><span class="s">${S.busy?"送っています…":""}</span>
      <button id="send" ${S.busy?"disabled":""}>出す</button></div>`;
 }
 function render(){document.getElementById("app").innerHTML=view();bind()}
 function bind(){
   const el=document.getElementById("app");
-  el.querySelectorAll(".pick button").forEach(b=>b.onclick=()=>{
-    const q=b.closest(".pick").dataset.q;
-    S.ans[q]=Object.assign({},S.ans[q],{want:b.dataset.v});render()});
-  el.querySelectorAll("[data-how]").forEach(t=>t.oninput=()=>{
-    const q=t.dataset.how;S.ans[q]=Object.assign({},S.ans[q],{how:t.value})});
-  el.querySelectorAll("[data-ex]").forEach(t=>t.oninput=()=>{
-    S.extra[+t.dataset.ex][t.dataset.f]=t.value});
+  el.querySelectorAll("[data-a]").forEach(t=>t.oninput=()=>{S[t.dataset.a][t.dataset.f]=t.value});
   const w=document.getElementById("who");if(w)w.oninput=()=>{S.who=w.value};
   const st=document.getElementById("store");if(st)st.onchange=()=>{S.store=st.value};
   const f1=document.getElementById("free1");if(f1)f1.oninput=()=>{S.free1=f1.value};
@@ -126,8 +142,14 @@ async function send(){
     window.scrollTo({top:0,behavior:"smooth"});return}
   const url=lsGet("url");
   if(!url){S.err="保存先が設定されていません。管理者から受け取ったリンクを開いてください。";render();return}
-  const answers=Q.map(x=>({q:x.q,want:(S.ans[x.q]||{}).want||"",how:(S.ans[x.q]||{}).how||""}))
-    .concat(S.extra.filter(e=>e.q.trim()).map(e=>({q:"（提案）"+e.q,want:"◎ やりたい",how:e.how})));
+  // **「やること」が空なら止める。** 1つは書いてほしい、が今回の主旨
+  if(!S.a1.what.trim()){S.err="「お店のためにできること」を1つ書いてください。小さなことで構いません。";
+    render();
+    const c=document.querySelector('[data-a=a1][data-f=what]');if(c)c.scrollIntoView({behavior:"smooth",block:"center"});
+    return}
+  const answers=[S.a1,S.a2].filter(a=>a.what.trim())
+    .map((a,i)=>({q:"できること"+(i+1),want:a.what.trim(),how:(a.why.trim()?"【理由】"+a.why.trim()+"　":"")+a.how.trim()}));
+  // **ここまで通ってから busy にする。** 手前で立てると、検証で戻ったときボタンが押せなくなる
   if(S.free1.trim())answers.push({q:"回す係について",want:"",how:S.free1});
   if(S.free2.trim())answers.push({q:"そのほか",want:"",how:S.free2});
   S.busy=true;render();
