@@ -109,6 +109,9 @@ nav.tabs button[aria-selected="true"]{color:var(--accent);font-weight:700}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-top:14px;display:grid;gap:10px}
 .panel h2{margin:0;font-size:15px}
+.help summary{cursor:pointer;font-weight:700;font-size:15px}
+.help ol{margin:8px 0 0;padding-left:20px;font-size:13px;line-height:1.75}
+.help li+li{margin-top:4px}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{padding:7px 4px;border-bottom:1px solid var(--line);text-align:right}
 th:first-child,td:first-child{text-align:left}
@@ -428,6 +431,11 @@ function renderInput(){
   const t=totals(S.cur);
   let h='<div class="sw"><span><b>仕入れも入力する</b>ふだんは月末在庫だけで大丈夫です</span>'+
         '<button id="toggleBuy" role="switch" aria-pressed="'+(S.showBuy?"true":"false")+'" aria-label="仕入れの入力欄を出す"><i></i></button></div>';
+  h+='<details class="panel help"><summary>使い方（月末にやること）</summary><ol>'+
+    '<li>月末に、棚にある材料の数を「月末在庫」に入れます。仕入れは、ふだんは入れなくて大丈夫です。</li>'+
+    '<li>全部入ったら、いちばん下の「棚卸しの報告をコピー」を押して、LINEに貼ります。</li>'+
+    '<li>月が終わったら、下の「集計」タブで、その月の売上を入れます。<b>店舗全体の総売上（税込）</b>です。ヘアだけ・技術だけにはしません。</li>'+
+    '<li>売上を入れると、材料費率が出ます。</li></ol></details>';
   if(t.neg>0)h+='<p class="note">使用量がマイナスの品目が'+t.neg+'件あります。その月の仕入れを入れてください。入れるまで材料費は少なく出ます。</p>';
   // **並びはシートの行順のまま。** カテゴリで束ねると棚を回る順と変わり、
   // 画面を行ったり来たりすることになる（LINEの報告順＝回る順に合わせてある）。
@@ -532,12 +540,15 @@ function renderSum(){
   const negList=ITEMS().map(it=>({it,c:calc(it,S.cur)})).filter(x=>x.c.counted&&x.c.use<0);
   const unp=ITEMS().filter(it=>it.price==null||it.price==="");
   let rateTxt;
-  if(t.rate==null)rateTxt='<p class="note" style="padding:0">その月の売上（税込）を入れると材料費率が出ます。BMの総売上をそのまま入れてください。</p>';
+  if(t.rate==null)rateTxt='<p class="note" style="padding:0">売上を入れると材料費率が出ます。</p>';
   else rateTxt='<p class="note" style="padding:0">材料費 '+yen(t.use)+" ÷ 売上 "+yen(t.sales)+" = <strong>"+t.rate.toFixed(1)+"%</strong>。目安は"+BAND[0]+"〜"+BAND[1]+
     "%です。"+(t.neg>0?"仕入れ未入力の品目が"+t.neg+"件あるので、実際はこれより高くなります。":"")+"</p>";
   return (t.n-t.done>0&&S.ready?'<p class="note">月末在庫が未入力の品目が'+(t.n-t.done)+"件あります。未入力は材料費に入りません。</p>":"")+
   '<section class="panel"><h2>材料費率</h2>'+
-    '<div class="row"><div class="fld"><label for="salesIn">'+ymLabel(S.cur)+'の売上（税込）</label><input id="salesIn" type="number" inputmode="numeric" min="0" step="1" value="'+(t.sales||"")+'" placeholder="例：5480000" '+dis+"></div></div>"+rateTxt+"</section>"+
+    '<div class="row"><div class="fld"><label for="salesIn">'+ymLabel(S.cur)+'の売上（税込）</label><input id="salesIn" type="number" inputmode="numeric" min="0" step="1" value="'+(t.sales||"")+'" placeholder="例：5480000" '+dis+"></div></div>"+
+    '<p class="note" style="padding:0">店舗全体の、その月の<b>総売上（税込）</b>です。ヘアだけ・技術だけにはしません。'+
+    'BMの「売上分析 → スタッフ別売上集計」で、期間を月初〜月末にして、総売上の合計を入れてください。'+
+    '月が終わってから入れます（途中だと小さく出て、材料費率が高く見えます）。</p>'+rateTxt+"</section>"+
   '<section class="panel"><h2>カテゴリ別（税込）</h2><div class="tw"><table><thead><tr><th>カテゴリ</th><th>材料費</th><th>仕入れ</th></tr></thead><tbody>'+
     (rows||'<tr><td colspan="3">まだデータがありません</td></tr>')+
     '</tbody><tfoot><tr><td>合計</td><td class="num">'+yen(t.use)+'</td><td class="num">'+yen(t.buy)+"</td></tr>"+
