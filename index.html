@@ -436,7 +436,7 @@ function renderInput(){
   h+='<details class="panel help"><summary>使い方（月末にやること）</summary><ol>'+
     '<li>月末に、棚にある材料の数を「月末在庫」に入れます。仕入れは、ふだんは入れなくて大丈夫です。</li>'+
     '<li>全部入ったら、いちばん下の「棚卸しの報告をコピー」を押して、LINEに貼ります。</li>'+
-    '<li>月が終わったら、下の「集計」タブで、その月の売上を入れます。<b>店舗全体の総売上（税込）</b>です。ヘアだけ・技術だけにはしません。</li>'+
+    '<li>月が終わったら、下の「集計」タブで、その月の売上を入れます。<b>ヘアのスタッフの総売上（税込）</b>です。アイラッシュは含めません（この棚卸しはヘアの材料だけのため）。</li>'+
     '<li>売上を入れると、材料費率が出ます。</li></ol></details>';
   if(t.neg>0)h+='<p class="note">使用量がマイナスの品目が'+t.neg+'件あります。その月の仕入れを入れてください。入れるまで材料費は少なく出ます。</p>';
   // **並びはシートの行順のまま。** カテゴリで束ねると棚を回る順と変わり、
@@ -548,8 +548,8 @@ function renderSum(){
   return (t.n-t.done>0&&S.ready?'<p class="note">月末在庫が未入力の品目が'+(t.n-t.done)+"件あります。未入力は材料費に入りません。</p>":"")+
   '<section class="panel"><h2>材料費率</h2>'+
     '<div class="row"><div class="fld"><label for="salesIn">'+ymLabel(S.cur)+'の売上（税込）</label><input id="salesIn" type="number" inputmode="numeric" min="0" step="1" value="'+(t.sales||"")+'" placeholder="例：5480000" '+dis+"></div></div>"+
-    '<p class="note" style="padding:0">店舗全体の、その月の<b>総売上（税込）</b>です。ヘアだけ・技術だけにはしません。'+
-    'BMの「売上分析 → スタッフ別売上集計」で、期間を月初〜月末にして、総売上の合計を入れてください。'+
+    '<p class="note" style="padding:0">ヘアのスタッフの、その月の<b>総売上（税込）</b>です。アイラッシュは含めません（この棚卸しはヘアの材料だけのため）。'+
+    'BMの「売上分析 → スタッフ別売上集計」で、期間を月初〜月末にして、ヘアのスタッフの総売上を合計して入れてください。'+
     '月が終わってから入れます（途中だと小さく出て、材料費率が高く見えます）。</p>'+rateTxt+"</section>"+
   '<section class="panel"><h2>カテゴリ別（税込）</h2><div class="tw"><table><thead><tr><th>カテゴリ</th><th>材料費</th><th>仕入れ</th></tr></thead><tbody>'+
     (rows||'<tr><td colspan="3">まだデータがありません</td></tr>')+
