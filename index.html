@@ -284,14 +284,16 @@ function lsSet(k,v){try{localStorage.setItem(P+k,v)}catch(e){}}
 const CFG=()=>({url:lsGet("url"),key:lsGet("key")});
 
 function readLink(){
-  // 共有リンク（#s=...）で来たら設定を取り込んで、URLから消す
+  // 共有リンク（#s=...）で来たら設定を取り込む。
+  // **URLからは消さない。** 消すと、履歴やブックマークから開き直したときや、
+  // ブラウザが保存を消したとき（iPhoneのSafariは一定期間使わないと消す。棚卸しは月1回）に
+  // 設定が無くなって「最初の設定」が出てしまう。URLに残せば、どこから開いても通る。
   const h=location.hash||"";
   if(!h.startsWith("#s="))return;
   try{
     const [u,k]=decodeURIComponent(escape(atob(h.slice(3)))).split("\u0001");
     if(u)lsSet("url",u);lsSet("key",k||"");
   }catch(e){}
-  history.replaceState(null,"",location.pathname+location.search);
 }
 function shareLink(){
   const c=CFG();
@@ -750,16 +752,19 @@ function renderName(){
 function renderSetup(){
   if(S.busy)return renderWait();
   const c=CFG();
-  return '<section class="panel" style="margin-top:18px"><h2>最初の設定</h2>'+
-  '<p class="note" style="padding:0">保存先のスプレッドシートにつなぎます。1回だけです。'+
-  '管理者から受け取ったリンクを開けば、この画面は出ません。</p>'+
+  return '<section class="panel" style="margin-top:18px"><h2>配られたリンクから開いてください</h2>'+
+  '<p class="note" style="padding:0">棚卸しのリンク（管理者からLINEで届いたもの）を、もう一度開いてください。'+
+  '別のアプリやブラウザで開くと、この画面になります。</p>'+
+  '<p class="note" style="padding:0">リンクが見つからないときは、管理者に「棚卸しのリンクをもう一度」と伝えてください。</p>'+
+  (S.err?'<p class="note" style="padding:0;color:var(--bad)">'+esc(S.err)+"</p>":"")+"</section>"+
+  '<details class="panel help"><summary>管理者の方（手で設定する）</summary>'+
+  '<p class="note" style="padding:0">保存先のスプレッドシートにつなぎます。リンクで開けるときは要りません。</p>'+
   '<div class="fld"><label for="cfgUrl">保存先のURL</label>'+
   '<input id="cfgUrl" value="'+esc(c.url)+'" placeholder="https://script.google.com/.../exec"></div>'+
   '<div class="fld"><label for="cfgKey">合言葉（決めていなければ空のまま）</label><input id="cfgKey" value="'+esc(c.key)+'"></div>'+
   '<div class="fld"><label for="cfgWho">あなたの名前（記録に残ります）</label>'+
   '<input id="cfgWho" value="'+esc(S.who)+'" placeholder="例：山田"></div>'+
-  '<div class="row"><button class="btn pri" id="cfgSave">つなぐ</button></div>'+
-  (S.err?'<p class="note" style="padding:0;color:var(--bad)">'+esc(S.err)+"</p>":"")+"</section>";
+  '<div class="row"><button class="btn pri" id="cfgSave">つなぐ</button></div></details>';
 }
 function renderSettings(){
   return '<section class="panel"><h2>この端末の設定</h2>'+
