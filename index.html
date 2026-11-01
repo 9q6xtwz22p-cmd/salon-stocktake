@@ -337,7 +337,13 @@ async function call(url,opt){
   if(!d.ok)throw fail(d.error==="key"?"合言葉が違います":"うまくいきませんでした",false);
   return d;
 }
-const apiGet =()=>retrying(()=>{const c=CFG();return call(c.url+q(c.key))});
+// **名前と店舗も送る。** 管理者が「棚卸しが終わったか」を確かめるためのアクセス履歴に使う
+// （スプレッドシート側にだけ残る。ページには出さない）
+const apiGet =()=>retrying(()=>{const c=CFG();
+  const u=new URL(c.url); if(c.key)u.searchParams.set("key",c.key);
+  if(S.who)u.searchParams.set("who",S.who);
+  if(S.store)u.searchParams.set("store",S.store);
+  return call(u.toString())});
 const apiPost=b =>retrying(()=>{const c=CFG();return call(c.url,{method:"POST",
   headers:{"Content-Type":"text/plain;charset=utf-8"},
   body:JSON.stringify(Object.assign({key:c.key},b))})});
@@ -361,11 +367,11 @@ function saveMonth(ym){
 }
 async function saveItems(){
   setSync("保存中…");
-  try{await apiPost({op:"items",store:S.store,items:cat().items});setSync("保存済み")}
+  try{await apiPost({op:"items",store:S.store,items:cat().items,who:S.who});setSync("保存済み")}
   catch(e){writeErr(e)}
 }
 async function saveStores(){
-  try{await apiPost({op:"stores",stores:S.stores})}catch(e){writeErr(e)}
+  try{await apiPost({op:"stores",stores:S.stores,store:S.store,who:S.who})}catch(e){writeErr(e)}
 }
 function writeErr(e){
   setSync("未保存");
